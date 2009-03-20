@@ -1,0 +1,45 @@
+What is putex ?
+===============
+
+putex is an interproces mutex that uses shared memory (PUTEX = Process mUTEX).
+
+
+Why ?
+=====
+
+If want to synchronize two ruby processes without using those painful file locks, you can use this.
+
+
+Sample Usage:
+=============
+
+process1.rb:
+require 'putex'
+f = Putex.new("/test-mutex")
+f.lock
+puts("locked the mutex once, grabbing lock again to spin-wait; go run process2.rb once locked up...\n")
+f.lock
+puts("got the lock, exiting\n")
+
+
+process2.rb:
+require 'putex'
+f = Putex.new("/text-mutex")
+puts "alive, unlocking"
+f.unlock
+puts "done, exiting"
+f.destroy
+
+
+in your terminal:
+% ruby process1.rb
+
+when it tells you to run process2.rb, in another terminal enter:
+% ruby process2.rb
+
+you should see process2 unlock process1 and allow it to exit.
+
+What's next ?
+=============
+
+Maybe some more process-to-process synchronization primitives?
