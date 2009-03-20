@@ -1,21 +1,26 @@
-What is putex ?
+What is shlock ?
 ===============
+shlock is a library that provides synchronization primitives that use shared memory.
 
-putex is an interproces mutex that uses shared memory (PUTEX = Process mUTEX).
-
+Currently, mutexes (Shlock::Putex) and rwlocks (Shlock::Prwlock) are implemented.
 
 Why ?
 =====
-
 If want to synchronize two ruby processes without using those painful file locks, you can use this.
 
+TODO
+====
+- It is probably not safe to use these pthread exposed APIs in this way. I should probably reimplement
+  the low-level locking primitives in C using atomic.h and futexes.
 
-Sample Usage:
-=============
+- Add documentation about Shlock::Prwlock
+
+Sample Usage of Shlock::Putex
+=============================
 
 process1.rb:
-require 'putex'
-f = Putex.new("/test-mutex")
+require 'shlock'
+f = Shlock::Putex.new("/test-mutex")
 f.lock
 puts("locked the mutex once, grabbing lock again to spin-wait; go run process2.rb once locked up...\n")
 f.lock
@@ -23,8 +28,8 @@ puts("got the lock, exiting\n")
 
 
 process2.rb:
-require 'putex'
-f = Putex.new("/text-mutex")
+require 'shlock'
+f = Shlock::Putex.new("/text-mutex")
 puts "alive, unlocking"
 f.unlock
 puts "done, exiting"
