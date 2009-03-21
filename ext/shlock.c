@@ -9,18 +9,22 @@
 
 struct mutex_info {
   pthread_mutex_t m;
-  int fd;
 };
 
 struct rwlock_info {
   pthread_rwlock_t rwlock;
-  int fd;
 };
 
-static int shared_mem_open(const char *name) {
-  int fd = shm_open (name, O_RDWR, S_IRUSR | S_IWUSR);
+/**
+ * @return ret 0 if the shared memory already existed, 1 if it had to be created.
+ */
+
+static int shared_mem_open(const char *name, int *fd) {
+  int ret = 0;
+  int mfd = shm_open (name, O_RDWR, S_IRUSR | S_IWUSR);
   if (fd < 0) {
-    fd = shm_open (name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    mfd = shm_open (name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    ret = 1;
     if (ftruncate(fd, sizeof(struct mutex_info)) == -1) {
       printf("ftruncate error: %s\n", strerror(errno));
       return -1;
@@ -32,22 +36,33 @@ static int shared_mem_open(const char *name) {
     return -1;
   }
 
-  return fd;
+  *fd = mfd;
+  return ret;
 }
 
 static VALUE rb_putex_new (VALUE self, VALUE name) {
   struct mutex_info *ms;
-  int fd = shared_mem_open(StringValuePtr(name));
-  if (fd < 0)
+  int mfd = 0;
+  int ret = shared_mem_open(StringValuePtr(name), &mfd);
+  if (mfd < 0)
     return Qnil;
   
-  ms = (struct mutex_info *)mmap(NULL, sizeof(struct mutex_info), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+  ms = (struct mutex_info *)mmap(NULL, sizeof(struct mutex_info), PROT_READ|PROT_WRITE, MAP_SHARED, mfd, 0);
+  close(mfd);
+
   if (ms == MAP_FAILED) {
     printf("mmap error: %s\n", strerror(errno));
     return Qnil;
   }
-  ms->fd = fd;
-  fsync(fd);
+
+  if (ret) {
+    /* mutex was just created so we need to set some attributes and initalize the mutex */
+    pthread_mutexattr_t mattr;
+    pthread_mutexattr_init(&mattr);
+    pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
+    pthread_mutex_init(&(ms->m), &mattr);
+  }
+
   VALUE obj = Data_Wrap_Struct(self, NULL, NULL, ms);
   return obj;
 }
@@ -55,8 +70,7 @@ static VALUE rb_putex_new (VALUE self, VALUE name) {
 static VALUE rb_putex_destroy (VALUE self) {
   struct mutex_info *m;
   Data_Get_Struct(self, struct mutex_info, m);
-  fsync(m->fd);
-  close(m->fd);
+  munmap(m, sizeof(struct mutex_info));
 
   return Qnil;
 }
@@ -79,17 +93,27 @@ static VALUE rb_putex_unlock (VALUE self) {
 
 static VALUE rb_rwlock_new (VALUE self, VALUE name) {
   struct rwlock_info *rws;
-  int fd = shared_mem_open (StringValuePtr(name));
-  if (fd < 0)
+  int mfd = 0;
+
+  int ret = shared_mem_open (StringValuePtr(name), &mfd);
+  if (ret < 0)
     return Qnil;
 
-  rws = (struct rwlock_info *)mmap(NULL, sizeof(struct rwlock_info), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+  rws = (struct rwlock_info *)mmap(NULL, sizeof(struct rwlock_info), PROT_READ|PROT_WRITE, MAP_SHARED, mfd, 0);
+  close(mfd);
+
   if (rws == MAP_FAILED) {
     printf("mmap error: %s\n", strerror(errno));
     return Qnil;
   }
-  rws->fd = fd;
-  fsync(fd);
+
+  if (ret) {
+    /* rwlock was just created so we need to set some attributes and initalize */
+    pthread_rwlockattr_t rwattr;
+    pthread_rwlockattr_init(&rwattr);
+    pthread_rwlockattr_setpshared(&rwattr, PTHREAD_PROCESS_SHARED);
+    pthread_rwlock_init(&(rws->rwlock), &rwattr);
+  }
 
   VALUE obj = Data_Wrap_Struct(self, NULL, NULL, rws);
   return obj;
@@ -98,9 +122,7 @@ static VALUE rb_rwlock_new (VALUE self, VALUE name) {
 static VALUE rb_rwlock_destory (VALUE self) {
   struct rwlock_info *rws;
   Data_Get_Struct(self, struct rwlock_info, rws);
-  fsync(rws->fd);
-  close(rws->fd);
-
+  munmap(rws, sizeof(struct rwlock_info));
   return Qnil;
 }
 
