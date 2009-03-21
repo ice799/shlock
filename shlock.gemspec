@@ -1,6 +1,6 @@
 spec = Gem::Specification.new do |s|
   s.name = 'shlock'
-  s.version = '0.0.2'
+  s.version = '0.0.3'
   s.date = '2009-03-20'
   s.summary = 'Inter-process synchronization primitives using shared memory'
   s.email = "ice799@gmail.com"
