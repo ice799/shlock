@@ -22,18 +22,17 @@ struct rwlock_info {
 static int shared_mem_open(const char *name, int *fd) {
   int ret = 0;
   int mfd = shm_open (name, O_RDWR, S_IRUSR | S_IWUSR);
-  if (fd < 0) {
+  if (mfd < 0) {
     mfd = shm_open (name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    if (mfd < 0) {
+      printf("shm_open error: %s\n", strerror(errno));
+      return -1;
+    }
     ret = 1;
-    if (ftruncate(fd, sizeof(struct mutex_info)) == -1) {
+    if (ftruncate(mfd, sizeof(struct mutex_info)) == -1) {
       printf("ftruncate error: %s\n", strerror(errno));
       return -1;
     }
-  }
-
-  if (fd < 0) {
-    printf("error: %s\n", strerror(errno));
-    return -1;
   }
 
   *fd = mfd;
