@@ -260,7 +260,7 @@ void Init_shlock() {
 
   /* Shlock::Psem */
   VALUE psem_class = rb_define_class_under(shared_lock_module, "Psem", rb_cObject);
-  rb_define_singleton(psem_class, "new", rb_psem_new, 2);
+  rb_define_singleton_method(psem_class, "new", rb_psem_new, 2);
   rb_define_method(psem_class, "lock", rb_psem_lock, 0);
   rb_define_method(psem_class, "unlock", rb_psem_unlock, 0);
   rb_define_method(psem_class, "destroy", rb_psem_destroy, 0);
